@@ -33,7 +33,27 @@ get_mask_frm_aparcAseg()
     echo $cmd #state the command
     log $cmd >> $OUT
     eval $cmd #execute the command
-
+    
+    # make a cortical mask really fast
+    cmd="${FREESURFER_HOME}/bin/mri_binarize \
+            --i ${iAparcAseg} \
+	    --min 1000 --max 2999 \
+            --o ${oDir}/tmp.nii.gz \
+        "    
+    echo $cmd #state the command
+    log $cmd >> $OUT
+    eval $cmd #execute the command
+    
+    cmd="${FREESURFER_HOME}/bin/mri_binarize \
+    		--i ${oDir}/bmask.nii.gz --min 1 \
+		--merge ${oDir}/tmp.nii.gz \
+		--o ${oDir}/mask.nii.gz \
+        "    
+    echo $cmd #state the command
+    log $cmd >> $OUT
+    eval $cmd #execute the command
+  
+    ls ${oDir}/tmp.nii.gz && rm ${oDir}/tmp.nii.gz
 }
 
 get_subcort_frm_aparcAseg()

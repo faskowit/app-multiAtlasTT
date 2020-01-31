@@ -205,6 +205,9 @@ cp -asv ${inputFSDir}/surf/?h.sphere.reg ${tempFSSubj}/surf/
 cp -asv ${inputFSDir}/surf/?h.white ${tempFSSubj}/surf/
 cp -asv ${inputFSDir}/surf/?h.pial ${tempFSSubj}/surf/
 cp -asv ${inputFSDir}/surf/?h.smoothwm ${tempFSSubj}/surf/
+cp -asv ${inputFSDir}/surf/?h.sulc ${tempFSSubj}/surf/
+cp -asv ${inputFSDir}/surf/?h.thickness ${tempFSSubj}/surf/
+cp -asv ${inputFSDir}/surf/?h.inflated ${tempFSSubj}/surf/
 
 # label
 cp -asv ${inputFSDir}/label/?h.cortex.label ${tempFSSubj}/label/
@@ -315,8 +318,8 @@ then
     echo "problem. could not read subjAparcAseg: ${subjAparcAseg}"
     exit 1
 else
-    # add or incase cannot do soft link
-    ln -s ${subjAparcAseg} ${outputDir}/subj_aparc+aseg_ln.nii.gz || cp ${subjAparcAseg} ${outputDir}/subj_aparc+aseg_ln.nii.gz
+    cp ${subjAparcAseg} ${outputDir}/subj_aparc+aseg_cp.nii.gz
+    subjAparcAseg=${outputDir}/subj_aparc+aseg_cp.nii.gz
 fi
 
 ####################################################################
@@ -326,20 +329,53 @@ fi
 if [[ ! -e ${outputDir}/${subj}_cortical_mask.nii.gz ]]
 then
 
-    #cmd="${FSLDIR}/bin/fslmaths \
-    #        ${subjAparcAseg} \
-    #        -thr 1000 -bin \
-    #        ${outputDir}/${subj}_cortical_mask.nii.gz \
-    #        -odt int \
-    #    "
+    # let's get a lh and rh, get largest component of each
     cmd="${FREESURFER_HOME}/bin/mri_binarize \
             --i ${subjAparcAseg} \
-            --min 1000 --binval 1 \
-            --o ${outputDir}/${subj}_cortical_mask.nii.gz \
+            --min 1000 --max 1999 --binval 1 \
+            --o ${outputDir}/lh.tmp_cort_mask.nii.gz \
         "     
     echo $cmd #state the command
     log $cmd >> $OUT
     eval $cmd #execute the command
+    cmd="${FREESURFER_HOME}/bin/mri_extract_largest_CC \
+            -T 1 \
+            ${outputDir}/lh.tmp_cort_mask.nii.gz \
+            ${outputDir}/lh.tmp_cort_mask.nii.gz \
+        "     
+    echo $cmd #state the command
+    log $cmd >> $OUT
+    eval $cmd #execute the command
+
+    cmd="${FREESURFER_HOME}/bin/mri_binarize \
+            --i ${subjAparcAseg} \
+            --min 2000 --max 2999 --binval 1 \
+            --o ${outputDir}/rh.tmp_cort_mask.nii.gz \
+        "     
+    echo $cmd #state the command
+    log $cmd >> $OUT
+    eval $cmd #execute the command
+    cmd="${FREESURFER_HOME}/bin/mri_extract_largest_CC \
+            -T 1 \
+            ${outputDir}/rh.tmp_cort_mask.nii.gz \
+            ${outputDir}/rh.tmp_cort_mask.nii.gz \
+        "     
+    echo $cmd #state the command
+    log $cmd >> $OUT
+    eval $cmd #execute the command
+
+    # write out the combined cortical_mask
+    cmd="${FREESURFER_HOME}/bin/mris_calc \
+            -o ${outputDir}/${subj}_cortical_mask.nii.gz \
+            ${outputDir}/lh.tmp_cort_mask.nii.gz \
+            add ${outputDir}/rh.tmp_cort_mask.nii.gz \
+        "
+    echo $cmd
+    log $cmd >> $OUT
+    eval $cmd
+
+    # remove the tmp
+    ls ${outputDir}/?h.tmp_cort_mask.nii.gz && rm ${outputDir}/?h.tmp_cort_mask.nii.gz
 
 fi
 
@@ -366,10 +402,50 @@ then
 
 fi
 
-get_mask_frm_aparcAseg \
-    ${subjAparcAseg} \
-    ${outputDir} \
-    ${subj}
+if [[ ! -e ${outputDir}/bmask.nii.gz ]]
+then
+
+    # function inputs:
+    #   aparc+aseg
+    #   out directory
+    #   subj variable, to name output files
+
+    # function output files:
+    #   bmask.nii.gz
+    #   mask.nii.gz
+
+   get_mask_frm_aparcAseg \
+      ${subjAparcAseg} \
+      ${outputDir} \
+      ${subj}
+
+fi
+
+# save the gii files for the annot.gii output
+if [[ ! -e ${outputDir}/rh.inflated.gii ]]
+then
+
+    for surfname in inflated pial white 
+    do
+
+        cmd="${FREESURFER_HOME}/bin/mris_convert \
+	        ${tempFSSubj}/surf/lh.${surfname} \
+	        ${outputDir}/lh.${surfname}.gii \
+            "
+        echo $cmd
+        log $cmd >> $OUT
+        eval $cmd
+        cmd="${FREESURFER_HOME}/bin/mris_convert \
+	        ${tempFSSubj}/surf/rh.${surfname} \
+	        ${outputDir}/rh.${surfname}.gii \
+            "
+        echo $cmd
+        log $cmd >> $OUT
+        eval $cmd
+    
+    done
+
+fi
 
 ####################################################################
 ####################################################################
@@ -535,9 +611,31 @@ do
     # remove temp files
     ls ${atlasOutputDir}/${subj}_subcort_mask_${atlas}tmp.nii.gz && rm ${atlasOutputDir}/${subj}_subcort_mask_${atlas}tmp.nii.gz 
 
-done
+    ###########################
+    # make a gii of the annot #
+    ###########################
 
-mri_binarize --i ${outputDir}/bmask.nii.gz --min 1 --merge ${outputDir}/output_cortical_mask.nii.gz --o ${outputDir}/mask.nii.gz
+    # lh
+    cmd="${FREESURFER_HOME}/bin/mris_convert \
+            --annot ${atlasOutputDir}/lh.${atlas}.annot \
+	    ${tempFSSubj}/surf/lh.white \
+	    ${atlasOutputDir}/lh.${atlas}.annot.gii \
+        "
+    echo $cmd
+    log $cmd >> $OUT
+    eval $cmd
+    
+    # rh
+    cmd="${FREESURFER_HOME}/bin/mris_convert \
+            --annot ${atlasOutputDir}/rh.${atlas}.annot \
+	    ${tempFSSubj}/surf/rh.white \
+	    ${atlasOutputDir}/rh.${atlas}.annot.gii \
+        "
+    echo $cmd
+    log $cmd >> $OUT
+    eval $cmd
+
+done
 
 # delete extra stuff
 # the temp fsDirectory we setup at very beginning

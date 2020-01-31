@@ -6,12 +6,8 @@
 # FreeSurfer
 # altas GCS data, which is automatically downloaded from figShare
 
-####################################################################
-####################################################################
-
-##for testing
-#set -e
-#INPUT_DIR=$1
+set -e
+set -x
 
 ####################################################################
 ####################################################################
@@ -20,12 +16,10 @@
 # setup to just do all 10
 
 INPUT_DIR=`jq -r '.fsin' config.json`
-#OUTPUT_DIR=`jq -r '' config.json`
-OUTPUT_DIR=${PWD}/output
-#FS_VERSION=`jq -r '.' config.json`
 FS_VERSION='6p0'
 atlasList=`jq -r '.atlas' config.json`
-t1=`jq -r '.t1' config.json`
+# no need to read in t1 for now...
+# t1=`jq -r '.t1' config.json`
 
 export atlasList 
 
@@ -44,6 +38,7 @@ fi
 
 # make sure that FS will run with the licence
 [[ -z "$FREESURFER_LICENSE" ]] && echo "Please set FREESURFER_LICENSE in .bashrc" && exit 1;
+echo $FREESURFER_LICENSE > license.txt
 
 ####################################################################
 ####################################################################
@@ -68,17 +63,13 @@ export atlasBaseDir=${workDir}atlas_data
 export scriptBaseDir=${PWD}/
 
 # make a list from these options: 
-# nspn500 gordon333 yeo17 hcp-mmp schaefer100-yeo17 
-# schaefer200-yeo17 schaefer400-yeo17 schaefer600-yeo17 schaefer800-yeo17 
-# schaefer1000-yeo17
-
-# actually read in atlast list from user input
-# export atlasList="nspn500 gordon333 yeo17 hcp-mmp schaefer100-yeo17 schaefer200-yeo17 schaefer400-yeo17 schaefer600-yeo17 schaefer800-yeo17 schaefer1000-yeo17"
+# gordon333dil hcp-mmp-b shen schaefer{100,200,300,400,500,600,800}-yeo17 yeo17dil
+# baldassano arslan_res150 arslan_res250
 
 ####################################################################
 ####################################################################
 
-mkdir -p ${OUTPUT_DIR}
+mkdir -p output
 
 if [[ ${useSingulairty}=="yes" ]] 
 then
@@ -105,7 +96,7 @@ else
 	if [[ ${gcsMissing} -eq 1 ]]
 	then
 	    echo "downloading data from figshare"
-	    wget -q -O figShareDL https://ndownloader.figshare.com/files/11768399
+	    wget -q -O figShareDL https://ndownloader.figshare.com/files/14037086
 	    tar -vxf figShareDL
 	    rm figShareDL
 	    echo "finished downloading from figshare"
@@ -119,43 +110,48 @@ fi
 ####################################################################
 # go into the folder where we also want output and setup notes file!
 
-touch ${OUTPUT_DIR}/log.txt
-echo "running maTT2"
+touch log.txt
 
 # run it
-echo "${INPUT_DIR}"
-echo "${OUTPUT_DIR}"
 cmd="${scriptBaseDir}/src/maTT2_applyGCS.sh \
 	-d ${INPUT_DIR} \
-	-o ${OUTPUT_DIR} \
-	-f ${FS_VERSION}
-    "
-echo $cmd 
-
+	-o output \
+	-f ${FS_VERSION}"
 if [[ ${useSingulairty}=="yes" ]] 
 then
     export SINGULARITYENV_atlasList=${atlasList}
     export SINGULARITYENV_atlasBaseDir=${atlasBaseDir}
     export SINGULARITYENV_scriptBaseDir=${scriptBaseDir}
-    singularity exec --writable -e docker://faskowit/app-multiatlastt bash -c "echo $FREESURFER_LICENSE > /usr/local/freesurfer/license.txt && $cmd"
+    #singularity exec --writable -e docker://faskowit/app-multiatlastt:0.0.2 bash -c "echo $FREESURFER_LICENSE > /usr/local/freesurfer/license.txt && $cmd"
+    singularity exec -e -B `pwd`/license.txt:/usr/local/freesurfer/license.txt docker://faskowit/app-multiatlastt:0.0.2 $cmd
 else
-    eval $cmd | tee -a ${PWD}/${OUTPUT_DIR}/log.txt
+    eval $cmd | tee -a log.txt
 fi
 
 ####################################################################
 ####################################################################
 # output handling
 
-mkdir -p parc
+mkdir -p parc-vol parc-surf mask
 for atlas in $atlasList
-	do
-		cp ${OUTPUT_DIR}/${atlas}/${atlas}_remap.nii.gz parc/parc.nii.gz
-		cp ${OUTPUT_DIR}/${atlas}/${atlas}_remap.nii.gz_remapKey.txt parc/key.txt
-		cp ${OUTPUT_DIR}/${atlas}/${atlas}_remap.nii.gz_remapKey.txt parc/key.txt
-		cp ${OUTPUT_DIR}/${atlas}/LUT_${atlas}.txt parc/
-		cp ${OUTPUT_DIR}/mask.nii.gz parc/mask.nii.gz
-		cp $t1 parc/
-	done
+do
+    # parc-vol
+    cp output/${atlas}/${atlas}_remap.nii.gz parc-vol/parc.nii.gz
+    cp output/${atlas}/${atlas}_remap.nii.gz_remapKey.txt parc-vol/key.txt
+    
+    # parc-surf
+    for surfname in inflated pial white
+    do
+        cp output/lh.${surfname}.gii parc-surf/lh.parc.${surfname}.gii
+        cp output/rh.${surfname}.gii parc-surf/rh.parc.${surfname}.gii
+    done
+    cp output/${atlas}/lh.${atlas}.annot.gii parc-surf/lh.parc.annot.gii
+    cp output/${atlas}/rh.${atlas}.annot.gii parc-surf/rh.parc.annot.gii
+    cp output/${atlas}/${atlas}_remap.nii.gz_remapKey.txt parc-surf/key.txt
+    
+    # mask
+    cp output/mask.nii.gz mask/mask.nii.gz
+done
 	
 echo "{\"tags\": [\"${atlas}\" ]}" > product.json
 
