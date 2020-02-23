@@ -138,6 +138,7 @@ do
     # parc-vol
     cp output/${atlas}/${atlas}_remap.nii.gz parc-vol/parc.nii.gz
     cp output/${atlas}/${atlas}_remap.nii.gz_remapKey.txt parc-vol/key.txt
+    cp output/${atlas}/${atlas}_remap.nii.gz_label.json parc-vol/label.json
     
     # parc-surf
     for surfname in inflated pial white
@@ -148,6 +149,7 @@ do
     cp output/${atlas}/lh.${atlas}.annot.gii parc-surf/lh.parc.annot.gii
     cp output/${atlas}/rh.${atlas}.annot.gii parc-surf/rh.parc.annot.gii
     cp output/${atlas}/${atlas}_remap.nii.gz_remapKey.txt parc-surf/key.txt
+    cp output/${atlas}/${atlas}_remap.nii.gz_label.json parc-surf/label.json
     
     # mask
     cp output/mask.nii.gz mask/mask.nii.gz
