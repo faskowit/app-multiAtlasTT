@@ -31,6 +31,7 @@ We we think you should cite the following when code using this code.
 1. Fischl, B. et al. Automatically parcellating the human cerebral cortex. Cereb. Cortex 14, 11–22 (2004)
 2. The doi on the brainlife platform: http://doi.org/10.25663/bl.app.23
 3. An acknowledgement to this github page, or the other [maTT github repo](https://github.com/faskowit/multiAtlasTT) would be appreciated.
+4. Avesani, P., McPherson, B., Hayashi, S. et al. The open diffusion data derivatives, brain data upcycling via integrated publishing of derivatives and reproducible open cloud services. Sci Data 6, 69 (2019). 
 
 ## Running the App 
 
